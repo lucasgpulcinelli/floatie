@@ -9,8 +9,10 @@ COPY . /srv/
 RUN go build -o main -v github.com/lucasgpulcinelli/floatie/cmd/main
 
 FROM alpine:latest
-EXPOSE 8080
 
 COPY --from=0 /srv/main /srv/main
+
+EXPOSE 8080
+EXPOSE 9999
 
 ENTRYPOINT ["/srv/main"]

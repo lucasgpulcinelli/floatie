@@ -4,7 +4,8 @@ services:
     image: lucasegp/floatie:latest
     hostname: floatie
     expose:
-      - "8080"
+      - "8080" # HTTP service port
+      - "9999" # raft protocol gRPC port
 
   nginx:
     image: nginx:latest
