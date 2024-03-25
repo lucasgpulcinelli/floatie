@@ -3,10 +3,12 @@
 package raft
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"time"
 
+	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -50,6 +52,8 @@ type Raft struct {
 	timerChan chan time.Duration
 	timerStop chan struct{}
 	server    *grpc.Server
+
+	rpcs.UnimplementedRaftServer
 }
 
 // A Log represents a log in the raft protocol, created at a certain term and
@@ -90,6 +94,7 @@ func New(id peerID, grpcAddr string, peerAddresses map[peerID]string) (*Raft, er
 	}
 
 	raft.server = grpc.NewServer()
+	rpcs.RegisterRaftServer(raft.server, raft)
 	go raft.server.Serve(listener)
 
 	raft.createTimerGoroutine()
@@ -102,7 +107,12 @@ func (raft *Raft) Stop() error {
 	raft.timerStop <- struct{}{}
 	raft.server.GracefulStop()
 
-	return nil
+	errs := []error{}
+	for _, conn := range raft.peers {
+		errs = append(errs, conn.Close())
+	}
+
+	return errors.Join(errs...)
 }
 
 func (raft *Raft) createTimerGoroutine() {

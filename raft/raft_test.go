@@ -3,7 +3,7 @@ package raft
 import "testing"
 
 func TestCreateRaft(t *testing.T) {
-	r, err := NewRaft(0, "localhost:9999", map[peerID]string{})
+	r, err := New(0, "localhost:9999", map[peerID]string{})
 	if err != nil {
 		t.Fatalf("creation: %v", err)
 	}
@@ -14,7 +14,7 @@ func TestCreateRaft(t *testing.T) {
 }
 
 func TestCreateWithPeers(t *testing.T) {
-	r, err := NewRaft(0, "localhost:9999", map[peerID]string{
+	r, err := New(0, "localhost:9999", map[peerID]string{
 		1: "localhost:2222", 2: "localhost:3333"},
 	)
 	if err != nil {
