@@ -23,13 +23,14 @@ type Raft struct {
 	currentTerm int
 	lastVoted   peerID
 	logs        []*Log
-	peers       []*grpc.ClientConn
+	peers       map[peerID]*grpc.ClientConn
 
 	commitIndex      int
 	lastAppliedIndex int
 
 	lp *LeaderProperties
 
+	id        peerID
 	timerChan chan time.Duration
 	timerStop chan struct{}
 	server    *grpc.Server
@@ -45,18 +46,18 @@ type LeaderProperties struct {
 	matchIndex []int
 }
 
-func NewRaft(grpcAddr string, peerAddresses []string) (*Raft, error) {
-	raft := &Raft{state: Follower, lastVoted: -1, logs: []*Log{}}
+func NewRaft(id peerID, grpcAddr string, peerAddresses map[peerID]string) (*Raft, error) {
+	raft := &Raft{id: id, state: Follower, lastVoted: -1, logs: []*Log{}}
 
-	raft.peers = []*grpc.ClientConn{}
-	for _, peer := range peerAddresses {
-		conn, err := grpc.Dial(peer,
+	raft.peers = map[peerID]*grpc.ClientConn{}
+	for id, address := range peerAddresses {
+		conn, err := grpc.Dial(address,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if err != nil {
 			return nil, err
 		}
-		raft.peers = append(raft.peers, conn)
+		raft.peers[id] = conn
 	}
 
 	listener, err := net.Listen("tcp", grpcAddr)
