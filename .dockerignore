@@ -1,0 +1,5 @@
+.*
+
+*.md
+nginx.conf
+docker-compose.yaml
