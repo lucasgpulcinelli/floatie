@@ -1,1 +1,35 @@
 syntax = "proto3";
+
+option go_package = "github.com/lucasgpulcinelli/floatie/raft/rpcs";
+package rpcs;
+
+service Raft {
+  rpc AppendEntries(AppendEntryData) returns (RaftResult) {}
+  rpc RequestVote(RequestVoteData) returns (RaftResult) {}
+}
+
+message AppendEntryData {
+  int32 term = 1;
+  int32 leaderID = 2;
+  int32 prevLogIndex = 3;
+  int32 prevLogTerm = 4;
+  int32 leaderCommit = 5;
+  repeated Log entries = 6;
+}
+
+message Log {
+  int32 term = 1;
+  string data = 2;
+}
+
+message RequestVoteData {
+  int32 term = 1;
+  int32 candidateID = 2;
+  int32 lastLogIndex = 3;
+  int32 lastLogTerm = 4;
+}
+
+message RaftResult {
+  bool success = 1;
+  int32 term = 2;
+}
