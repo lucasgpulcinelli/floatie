@@ -1,3 +1,5 @@
+// Package raft implements the raft protocol via the Raft struct, using gRPC to
+// communicate between peers.
 package raft
 
 import (
@@ -9,15 +11,29 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// State defines the moment in the raft FSM that the instance is in.
 type State byte
+
+// peerID defines the identifier for peers.
 type peerID int
 
+// The possible states for the raft FSM.
 const (
 	Follower State = iota
 	Candidate
 	Leader
 )
 
+// A Raft represents a node in the raft protocol running locally.
+//
+// The instance, when creted with the New() function, connects with the other
+// peers, elects leaders, and replicate logs via gRPC and a timer goroutine
+// automatically.
+//
+// An instance should be stopped via the Stop method in order to properly stop
+// the timer goroutine and the gRPC server.
+//
+// An instance must only have leader properties if the state == Leader.
 type Raft struct {
 	state       State
 	currentTerm int
@@ -36,17 +52,25 @@ type Raft struct {
 	server    *grpc.Server
 }
 
+// A Log represents a log in the raft protocol, created at a certain term and
+// containing some data.
 type Log struct {
 	Term int
 	Data any
 }
 
+// A LeaderProperty is a value that must only be instantiated during a term
+// where the current instance is a Leader.
 type LeaderProperties struct {
 	nextIndex  []int
 	matchIndex []int
 }
 
-func NewRaft(id peerID, grpcAddr string, peerAddresses map[peerID]string) (*Raft, error) {
+// New creates a new raft instance with a unique id, some peers and an address
+// to expose the gRPC service. It creates the gRPC server as well as the timer
+// goroutine to trigger elections.
+// The function may return without a proper leader elected.
+func New(id peerID, grpcAddr string, peerAddresses map[peerID]string) (*Raft, error) {
 	raft := &Raft{id: id, state: Follower, lastVoted: -1, logs: []*Log{}}
 
 	raft.peers = map[peerID]*grpc.ClientConn{}
@@ -72,6 +96,8 @@ func NewRaft(id peerID, grpcAddr string, peerAddresses map[peerID]string) (*Raft
 	return raft, nil
 }
 
+// Stop stops the raft instance from sending and receiving RPCs and timing out
+// to elect leaders. Deletes the gRPC server and the timer goroutine.
 func (raft *Raft) Stop() error {
 	raft.timerStop <- struct{}{}
 	raft.server.GracefulStop()
@@ -85,6 +111,9 @@ func (raft *Raft) createTimerGoroutine() {
 	go raft.timerLoop()
 }
 
+// timerLoop runs in a separate goroutine to trigger leader election if a
+// certain time passes as per the protocol. It can only exit if a value is
+// received in the raft.timerStop channel.
 func (raft *Raft) timerLoop() {
 	ticker := time.NewTicker(time.Millisecond * 10)
 	started := time.Now()
