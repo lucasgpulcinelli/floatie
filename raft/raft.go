@@ -16,9 +16,6 @@ import (
 // State defines the moment in the raft FSM that the instance is in.
 type State byte
 
-// peerID defines the identifier for peers.
-type peerID int
-
 // The possible states for the raft FSM.
 const (
 	Follower State = iota
@@ -38,17 +35,17 @@ const (
 // An instance must only have leader properties if the state == Leader.
 type Raft struct {
 	state       State
-	currentTerm int
-	lastVoted   peerID
+	currentTerm int32
+	lastVoted   int32
 	logs        []*Log
-	peers       map[peerID]*grpc.ClientConn
+	peers       map[int32]*grpc.ClientConn
 
-	commitIndex      int
-	lastAppliedIndex int
+	commitIndex      int32
+	lastAppliedIndex int32
 
 	lp *LeaderProperties
 
-	id        peerID
+	id        int32
 	timerChan chan time.Duration
 	timerStop chan struct{}
 	server    *grpc.Server
@@ -59,25 +56,25 @@ type Raft struct {
 // A Log represents a log in the raft protocol, created at a certain term and
 // containing some data.
 type Log struct {
-	Term int
+	Term int32
 	Data any
 }
 
 // A LeaderProperty is a value that must only be instantiated during a term
 // where the current instance is a Leader.
 type LeaderProperties struct {
-	nextIndex  []int
-	matchIndex []int
+	nextIndex  []int32
+	matchIndex []int32
 }
 
 // New creates a new raft instance with a unique id, some peers and an address
 // to expose the gRPC service. It creates the gRPC server as well as the timer
 // goroutine to trigger elections.
 // The function may return without a proper leader elected.
-func New(id peerID, grpcAddr string, peerAddresses map[peerID]string) (*Raft, error) {
+func New(id int32, grpcAddr string, peerAddresses map[int32]string) (*Raft, error) {
 	raft := &Raft{id: id, state: Follower, lastVoted: -1, logs: []*Log{}}
 
-	raft.peers = map[peerID]*grpc.ClientConn{}
+	raft.peers = map[int32]*grpc.ClientConn{}
 	for id, address := range peerAddresses {
 		conn, err := grpc.Dial(address,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
