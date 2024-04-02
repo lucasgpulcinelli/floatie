@@ -2,13 +2,43 @@ package raft
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 )
 
+func (raft *Raft) matchLog(logIndex, logTerm int32) bool {
+	if len(raft.logs) < int(logIndex) {
+		return false
+	}
+
+	if raft.logs[logIndex].Term != logTerm {
+		raft.logs = raft.logs[:logIndex]
+		return false
+	}
+
+	return true
+}
+
 func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData) (*rpcs.RaftResult, error) {
-	return nil, fmt.Errorf("Not implemented")
+	fail := &rpcs.RaftResult{Success: false, Term: raft.currentTerm}
+
+	if data.Term < raft.currentTerm {
+		return fail, nil
+	}
+
+	if !raft.matchLog(data.PrevLogIndex, data.PrevLogTerm) {
+		return fail, nil
+	}
+
+	for _, e := range data.Entries {
+		raft.logs = append(raft.logs, e)
+	}
+
+	if data.LeaderCommit > raft.commitIndex {
+		raft.commitIndex = min(data.LeaderCommit, int32(len(raft.logs)))
+	}
+
+	return &rpcs.RaftResult{Success: true, Term: raft.currentTerm}, nil
 }
 
 func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (*rpcs.RaftResult, error) {

@@ -37,7 +37,7 @@ type Raft struct {
 	state       State
 	currentTerm int32
 	lastVoted   int32
-	logs        []*Log
+	logs        []*rpcs.Log
 	peers       map[int32]*grpc.ClientConn
 
 	commitIndex      int32
@@ -53,13 +53,6 @@ type Raft struct {
 	rpcs.UnimplementedRaftServer
 }
 
-// A Log represents a log in the raft protocol, created at a certain term and
-// containing some data.
-type Log struct {
-	Term int32
-	Data any
-}
-
 // A LeaderProperty is a value that must only be instantiated during a term
 // where the current instance is a Leader.
 type LeaderProperties struct {
@@ -72,7 +65,13 @@ type LeaderProperties struct {
 // goroutine to trigger elections.
 // The function may return without a proper leader elected.
 func New(id int32, grpcAddr string, peerAddresses map[int32]string) (*Raft, error) {
-	raft := &Raft{id: id, state: Follower, lastVoted: -1, logs: []*Log{}}
+	raft := &Raft{
+		id:          id,
+		state:       Follower,
+		lastVoted:   -1,
+		commitIndex: -1,
+		logs:        []*rpcs.Log{},
+	}
 
 	raft.peers = map[int32]*grpc.ClientConn{}
 	for id, address := range peerAddresses {
