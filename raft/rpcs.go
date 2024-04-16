@@ -20,6 +20,9 @@ func (raft *Raft) matchLog(logIndex, logTerm int32) bool {
 }
 
 func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData) (*rpcs.RaftResult, error) {
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+
 	fail := &rpcs.RaftResult{Success: false, Term: raft.currentTerm}
 
 	if data.Term < raft.currentTerm {
@@ -42,6 +45,9 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 }
 
 func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (*rpcs.RaftResult, error) {
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+
 	voteFalse := &rpcs.RaftResult{Success: false, Term: raft.currentTerm}
 
 	if raft.lastVoted != -1 && raft.lastVoted != data.CandidateID {

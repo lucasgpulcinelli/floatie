@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
@@ -50,6 +51,8 @@ type Raft struct {
 	timerStop chan struct{}
 	server    *grpc.Server
 
+	mut sync.Mutex
+
 	rpcs.UnimplementedRaftServer
 }
 
@@ -72,6 +75,9 @@ func New(id int32, grpcAddr string, peerAddresses map[int32]string) (*Raft, erro
 		commitIndex: -1,
 		logs:        []*rpcs.Log{},
 	}
+
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
 
 	raft.peers = map[int32]*grpc.ClientConn{}
 	for id, address := range peerAddresses {
@@ -100,6 +106,9 @@ func New(id int32, grpcAddr string, peerAddresses map[int32]string) (*Raft, erro
 // Stop stops the raft instance from sending and receiving RPCs and timing out
 // to elect leaders. Deletes the gRPC server and the timer goroutine.
 func (raft *Raft) Stop() error {
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+
 	raft.timerStop <- struct{}{}
 	raft.server.GracefulStop()
 
@@ -126,7 +135,7 @@ func (raft *Raft) timerLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Println("timeout, start election")
+			raft.triggerElection()
 			ticker.Reset(time.Millisecond * 10)
 		case d := <-raft.timerChan:
 			ticker.Reset(time.Now().Sub(started) + d)
@@ -135,4 +144,11 @@ func (raft *Raft) timerLoop() {
 		}
 		started = time.Now()
 	}
+}
+
+func (raft *Raft) triggerElection() {
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+
+	fmt.Println("timeout, start election")
 }
