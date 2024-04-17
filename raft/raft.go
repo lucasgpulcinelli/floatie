@@ -4,7 +4,6 @@ package raft
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -135,8 +134,9 @@ func (raft *Raft) timerLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			raft.triggerElection()
-			ticker.Reset(time.Millisecond * 10)
+			if raft.state != Leader {
+				raft.triggerElection()
+			}
 		case d := <-raft.timerChan:
 			ticker.Reset(max(time.Now().Sub(started)+d, time.Millisecond*10))
 		case <-raft.timerStop:
@@ -144,11 +144,4 @@ func (raft *Raft) timerLoop() {
 		}
 		started = time.Now()
 	}
-}
-
-func (raft *Raft) triggerElection() {
-	raft.mut.Lock()
-	defer raft.mut.Unlock()
-
-	fmt.Println("timeout, start election")
 }

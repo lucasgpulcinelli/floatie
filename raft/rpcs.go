@@ -38,8 +38,7 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 
 	raft.currentTerm = data.Term
 
-	// if leader, stop sending heartbeats
-	raft.state = Follower
+	raft.setState(Follower)
 
 	for _, e := range data.Entries {
 		raft.logs = append(raft.logs, e)
@@ -78,8 +77,7 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 	raft.lastVoted = data.CandidateID
 	raft.currentTerm = data.Term
 
-	// if leader, stop sending heartbeats
-	raft.state = Follower
+	raft.setState(Follower)
 
 	return &rpcs.RaftResult{Success: true, Term: raft.currentTerm}, nil
 }
