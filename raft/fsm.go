@@ -23,9 +23,6 @@ func (raft *Raft) abortElection() {
 }
 
 func (raft *Raft) triggerElection() {
-	raft.mut.Lock()
-	defer raft.mut.Unlock()
-
 	if raft.state == Leader {
 		panic("triggered election while leader")
 	}

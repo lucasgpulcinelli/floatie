@@ -134,9 +134,11 @@ func (raft *Raft) timerLoop() {
 	for {
 		select {
 		case <-ticker.C:
+			raft.mut.Lock()
 			if raft.state != Leader {
 				raft.triggerElection()
 			}
+			raft.mut.Unlock()
 		case d := <-raft.timerChan:
 			ticker.Reset(max(time.Now().Sub(started)+d, time.Millisecond*10))
 		case <-raft.timerStop:
