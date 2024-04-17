@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"time"
 
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 )
@@ -33,6 +34,13 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 		return fail, nil
 	}
 
+	raft.timerChan <- time.Millisecond * 5
+
+	raft.currentTerm = data.Term
+
+	// if leader, stop sending heartbeats
+	raft.state = Follower
+
 	for _, e := range data.Entries {
 		raft.logs = append(raft.logs, e)
 	}
@@ -50,11 +58,11 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 
 	voteFalse := &rpcs.RaftResult{Success: false, Term: raft.currentTerm}
 
-	if raft.lastVoted != -1 && raft.lastVoted != data.CandidateID {
+	if data.Term < raft.currentTerm || data.LastLogIndex < raft.lastAppliedIndex {
 		return voteFalse, nil
 	}
 
-	if data.Term < raft.currentTerm || data.LastLogIndex < raft.lastAppliedIndex {
+	if data.Term == raft.currentTerm && raft.lastVoted != data.CandidateID {
 		return voteFalse, nil
 	}
 
@@ -64,6 +72,8 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 			return voteFalse, nil
 		}
 	}
+
+	raft.timerChan <- time.Millisecond * 5
 
 	raft.lastVoted = data.CandidateID
 	raft.currentTerm = data.Term

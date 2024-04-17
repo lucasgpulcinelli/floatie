@@ -138,7 +138,7 @@ func (raft *Raft) timerLoop() {
 			raft.triggerElection()
 			ticker.Reset(time.Millisecond * 10)
 		case d := <-raft.timerChan:
-			ticker.Reset(time.Now().Sub(started) + d)
+			ticker.Reset(max(time.Now().Sub(started)+d, time.Millisecond*10))
 		case <-raft.timerStop:
 			return
 		}
