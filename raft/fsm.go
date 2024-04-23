@@ -1,8 +1,35 @@
 package raft
 
-import "fmt"
+import (
+	"log/slog"
+)
+
+// State defines the moment in the raft FSM that the instance is in.
+type State byte
+
+// The possible states for the raft FSM.
+const (
+	Follower State = iota
+	Candidate
+	Leader
+)
+
+func (s State) String() string {
+	switch s {
+	case Follower:
+		return "Follower"
+	case Leader:
+		return "Leader"
+	case Candidate:
+		return "Candidate"
+	default:
+		return "Invalid"
+	}
+}
 
 func (raft *Raft) setState(state State) {
+	slog.Debug("setting state", "from", raft.state, "to", state)
+
 	switch raft.state {
 	case Leader:
 		raft.stopLeader()
@@ -15,19 +42,19 @@ func (raft *Raft) setState(state State) {
 }
 
 func (raft *Raft) stopLeader() {
-
+	slog.Debug("stop being leader")
 }
 
 func (raft *Raft) abortElection() {
-
+	slog.Debug("aborting election")
 }
 
 func (raft *Raft) triggerElection() {
+	slog.Debug("starting election")
+
 	if raft.state == Leader {
 		panic("triggered election while leader")
 	}
 
 	raft.setState(Candidate)
-
-	fmt.Println("timeout, start election")
 }

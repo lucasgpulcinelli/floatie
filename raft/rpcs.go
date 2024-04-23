@@ -2,7 +2,7 @@ package raft
 
 import (
 	"context"
-	"time"
+	"log/slog"
 
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 )
@@ -12,15 +12,12 @@ func (raft *Raft) matchLog(logIndex, logTerm int32) bool {
 		return false
 	}
 
-	if raft.logs[logIndex].Term != logTerm {
-		raft.logs = raft.logs[:logIndex]
-		return false
-	}
-
 	return true
 }
 
 func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData) (*rpcs.RaftResult, error) {
+	slog.Debug("received AppendEntries", "data", data)
+
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
 
@@ -34,7 +31,9 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 		return fail, nil
 	}
 
-	raft.timerChan <- time.Millisecond * 5
+	slog.Debug("accepted AppendEntries", "data", data)
+
+	raft.timerChan <- randDuration(raft.options.DeltaLow, raft.options.DeltaHigh)
 
 	raft.currentTerm = data.Term
 
@@ -52,6 +51,8 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 }
 
 func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (*rpcs.RaftResult, error) {
+	slog.Debug("received RequestVote", "data", data)
+
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
 
@@ -72,7 +73,9 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 		}
 	}
 
-	raft.timerChan <- time.Millisecond * 5
+	slog.Debug("accepted RequestVote", "data", data)
+
+	raft.timerChan <- randDuration(raft.options.DeltaLow, raft.options.DeltaHigh)
 
 	raft.lastVoted = data.CandidateID
 	raft.currentTerm = data.Term

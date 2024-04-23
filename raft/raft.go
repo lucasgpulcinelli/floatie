@@ -4,6 +4,7 @@ package raft
 
 import (
 	"errors"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
@@ -11,16 +12,6 @@ import (
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-)
-
-// State defines the moment in the raft FSM that the instance is in.
-type State byte
-
-// The possible states for the raft FSM.
-const (
-	Follower State = iota
-	Candidate
-	Leader
 )
 
 // A Raft represents a node in the raft protocol running locally.
@@ -52,7 +43,19 @@ type Raft struct {
 
 	mut sync.Mutex
 
+	options *RaftOption
+
 	rpcs.UnimplementedRaftServer
+}
+
+// A RaftOption defines the timings and constants related with the raft
+// protocol.
+type RaftOption struct {
+	TimeoutLow  time.Duration
+	TimeoutHigh time.Duration
+
+	DeltaLow  time.Duration
+	DeltaHigh time.Duration
 }
 
 // A LeaderProperty is a value that must only be instantiated during a term
@@ -66,13 +69,14 @@ type LeaderProperties struct {
 // to expose the gRPC service. It creates the gRPC server as well as the timer
 // goroutine to trigger elections.
 // The function may return without a proper leader elected.
-func New(id int32, grpcAddr string, peerAddresses map[int32]string) (*Raft, error) {
+func New(id int32, grpcAddr string, peerAddresses map[int32]string, options *RaftOption) (*Raft, error) {
 	raft := &Raft{
 		id:          id,
 		state:       Follower,
 		lastVoted:   -1,
 		commitIndex: -1,
 		logs:        []*rpcs.Log{},
+		options:     options,
 	}
 
 	raft.mut.Lock()
@@ -105,6 +109,8 @@ func New(id int32, grpcAddr string, peerAddresses map[int32]string) (*Raft, erro
 // Stop stops the raft instance from sending and receiving RPCs and timing out
 // to elect leaders. Deletes the gRPC server and the timer goroutine.
 func (raft *Raft) Stop() error {
+	slog.Debug("stopping raft instance")
+
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
 
@@ -129,7 +135,9 @@ func (raft *Raft) createTimerGoroutine() {
 // certain time passes as per the protocol. It can only exit if a value is
 // received in the raft.timerStop channel.
 func (raft *Raft) timerLoop() {
-	ticker := time.NewTicker(time.Millisecond * 10)
+	timeout := randDuration(raft.options.TimeoutLow, raft.options.TimeoutHigh)
+
+	ticker := time.NewTicker(timeout)
 	started := time.Now()
 	for {
 		select {
@@ -140,7 +148,7 @@ func (raft *Raft) timerLoop() {
 			}
 			raft.mut.Unlock()
 		case d := <-raft.timerChan:
-			ticker.Reset(max(time.Now().Sub(started)+d, time.Millisecond*10))
+			ticker.Reset(max(time.Now().Sub(started)+d, timeout))
 		case <-raft.timerStop:
 			return
 		}
