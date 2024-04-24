@@ -52,8 +52,11 @@ func (raft *Raft) abortElection() {
 func (raft *Raft) triggerElection() {
 	slog.Debug("starting election")
 
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+
 	if raft.state == Leader {
-		panic("triggered election while leader")
+		return
 	}
 
 	raft.setState(Candidate)

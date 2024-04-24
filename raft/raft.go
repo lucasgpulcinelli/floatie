@@ -82,6 +82,7 @@ func New(id int32, grpcAddr string, peerAddresses map[int32]string, options *Raf
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
 
+	// connect to peers
 	raft.peers = map[int32]*grpc.ClientConn{}
 	for id, address := range peerAddresses {
 		conn, err := grpc.Dial(address,
@@ -93,6 +94,7 @@ func New(id int32, grpcAddr string, peerAddresses map[int32]string, options *Raf
 		raft.peers[id] = conn
 	}
 
+	// start gRPC server
 	listener, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
 		return nil, err
@@ -102,7 +104,15 @@ func New(id int32, grpcAddr string, peerAddresses map[int32]string, options *Raf
 	rpcs.RegisterRaftServer(raft.server, raft)
 	go raft.server.Serve(listener)
 
-	raft.createTimerGoroutine()
+	// start timer goroutine
+	raft.timerChan = make(chan time.Duration)
+	raft.timerStop = make(chan struct{}, 0)
+	timeout := randDuration(raft.options.TimeoutLow, raft.options.TimeoutHigh)
+
+	go timerLoop(timeout, raft.timerChan, raft.timerStop, func() {
+		go raft.triggerElection()
+	})
+
 	return raft, nil
 }
 
@@ -115,6 +125,7 @@ func (raft *Raft) Stop() error {
 	defer raft.mut.Unlock()
 
 	raft.timerStop <- struct{}{}
+
 	raft.server.GracefulStop()
 
 	errs := []error{}
@@ -123,35 +134,4 @@ func (raft *Raft) Stop() error {
 	}
 
 	return errors.Join(errs...)
-}
-
-func (raft *Raft) createTimerGoroutine() {
-	raft.timerChan = make(chan time.Duration)
-	raft.timerStop = make(chan struct{}, 0)
-	go raft.timerLoop()
-}
-
-// timerLoop runs in a separate goroutine to trigger leader election if a
-// certain time passes as per the protocol. It can only exit if a value is
-// received in the raft.timerStop channel.
-func (raft *Raft) timerLoop() {
-	timeout := randDuration(raft.options.TimeoutLow, raft.options.TimeoutHigh)
-
-	ticker := time.NewTicker(timeout)
-	started := time.Now()
-	for {
-		select {
-		case <-ticker.C:
-			raft.mut.Lock()
-			if raft.state != Leader {
-				raft.triggerElection()
-			}
-			raft.mut.Unlock()
-		case d := <-raft.timerChan:
-			ticker.Reset(max(time.Now().Sub(started)+d, timeout))
-		case <-raft.timerStop:
-			return
-		}
-		started = time.Now()
-	}
 }
