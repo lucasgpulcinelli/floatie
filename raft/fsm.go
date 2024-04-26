@@ -36,6 +36,9 @@ func (raft *Raft) setState(state State) {
 	case Candidate:
 		raft.abortElection()
 	case Follower:
+		break
+	default:
+		panic("tried to set state to invalid value")
 	}
 
 	raft.state = state
