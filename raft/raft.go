@@ -14,12 +14,8 @@ import (
 
 // A Raft represents a node in the raft protocol running locally.
 //
-// The instance, when creted with the New() function, connects with the other
-// peers, elects leaders, and replicate logs via gRPC and a timer goroutine
-// automatically.
-//
 // An instance should be stopped via the Stop method in order to properly stop
-// the timer goroutine and the gRPC server.
+// the timer goroutine and the gRPC server if they exist.
 //
 // An instance must only have leader properties if the state == Leader.
 type Raft struct {
@@ -62,10 +58,9 @@ type LeaderProperties struct {
 	matchIndex []int32
 }
 
-// New creates a new raft instance with a unique id, some peers and an address
-// to expose the gRPC service. It creates the gRPC server as well as the timer
-// goroutine to trigger elections.
-// The function may return without a proper leader elected.
+// New creates a new raft instance with a unique id and some peers. It does not
+// create the gRPC server nor the timer goroutine to trigger elections.
+// To do that, use the WithAddress and StartTimerLoop methods.
 func New(id int32, peers map[int32]*rpcs.RaftClient) *Raft {
 	return &Raft{
 		id:          id,
@@ -77,6 +72,7 @@ func New(id int32, peers map[int32]*rpcs.RaftClient) *Raft {
 	}
 }
 
+// WithAddress serves the raft server at an address specified.
 func (raft *Raft) WithAddress(grpcAddr string) error {
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
@@ -94,6 +90,8 @@ func (raft *Raft) WithAddress(grpcAddr string) error {
 	return nil
 }
 
+// StartTimerLoop starts the timer goroutine to trigger elections if the leader
+// fails to send heartbeats.
 func (raft *Raft) StartTimerLoop(timings *RaftTimings) {
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
@@ -112,10 +110,10 @@ func (raft *Raft) StartTimerLoop(timings *RaftTimings) {
 // Stop stops the raft instance from sending and receiving RPCs and timing out
 // to elect leaders. Deletes the gRPC server and the timer goroutine.
 func (raft *Raft) Stop() {
-	slog.Debug("stopping raft instance")
-
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
+
+	slog.Debug("stopping raft instance")
 
 	if raft.timerStop != nil {
 		raft.timerStop <- struct{}{}
