@@ -3,7 +3,6 @@
 package raft
 
 import (
-	"errors"
 	"log/slog"
 	"net"
 	"sync"
@@ -28,7 +27,7 @@ type Raft struct {
 	currentTerm int32
 	lastVoted   int32
 	logs        []*rpcs.Log
-	peers       map[int32]*grpc.ClientConn
+	peers       map[int32]*rpcs.RaftClient
 
 	commitIndex      int32
 	lastAppliedIndex int32
@@ -42,14 +41,13 @@ type Raft struct {
 
 	mut sync.Mutex
 
-	options *RaftOption
+	timings *RaftTimings
 
 	rpcs.UnimplementedRaftServer
 }
 
-// A RaftOption defines the timings and constants related with the raft
-// protocol.
-type RaftOption struct {
+// A RaftTimings defines the timings constants related with the raft protocol.
+type RaftTimings struct {
 	TimeoutLow  time.Duration
 	TimeoutHigh time.Duration
 
@@ -68,58 +66,62 @@ type LeaderProperties struct {
 // to expose the gRPC service. It creates the gRPC server as well as the timer
 // goroutine to trigger elections.
 // The function may return without a proper leader elected.
-func New(id int32, grpcAddr string, peers map[int32]*grpc.ClientConn, options *RaftOption) (*Raft, error) {
-	raft := &Raft{
+func New(id int32, peers map[int32]*rpcs.RaftClient) *Raft {
+	return &Raft{
 		id:          id,
 		state:       Follower,
 		lastVoted:   -1,
 		commitIndex: -1,
 		logs:        []*rpcs.Log{},
-		options:     options,
 		peers:       peers,
 	}
+}
 
+func (raft *Raft) WithAddress(grpcAddr string) error {
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
 
 	// start gRPC server
 	listener, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	raft.server = grpc.NewServer()
 	rpcs.RegisterRaftServer(raft.server, raft)
 	go raft.server.Serve(listener)
 
-	// start timer goroutine
+	return nil
+}
+
+func (raft *Raft) StartTimerLoop(timings *RaftTimings) {
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+
+	raft.timings = timings
+
 	raft.timerChan = make(chan time.Duration)
 	raft.timerStop = make(chan struct{}, 0)
-	timeout := randDuration(raft.options.TimeoutLow, raft.options.TimeoutHigh)
+	timeout := randDuration(timings.TimeoutLow, timings.TimeoutHigh)
 
 	go timerLoop(timeout, raft.timerChan, raft.timerStop, func() {
 		go raft.triggerElection()
 	})
-
-	return raft, nil
 }
 
 // Stop stops the raft instance from sending and receiving RPCs and timing out
 // to elect leaders. Deletes the gRPC server and the timer goroutine.
-func (raft *Raft) Stop() error {
+func (raft *Raft) Stop() {
 	slog.Debug("stopping raft instance")
 
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
 
-	raft.timerStop <- struct{}{}
-
-	raft.server.GracefulStop()
-
-	errs := []error{}
-	for _, conn := range raft.peers {
-		errs = append(errs, conn.Close())
+	if raft.timerStop != nil {
+		raft.timerStop <- struct{}{}
 	}
 
-	return errors.Join(errs...)
+	if raft.server != nil {
+		raft.server.GracefulStop()
+	}
 }

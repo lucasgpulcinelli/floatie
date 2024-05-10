@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/lucasgpulcinelli/floatie/raft"
-	"google.golang.org/grpc"
+	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 )
 
 var (
@@ -23,16 +23,18 @@ func main() {
 	)
 
 	slog.SetDefault(logger)
-
 	slog.Debug("starting Raft...")
 
-	var err error
-	raftInstance, err = raft.New(0, ":8081", map[int32]*grpc.ClientConn{}, &raft.RaftOption{
+	raftInstance = raft.New(0, map[int32]*rpcs.RaftClient{})
+
+	raftInstance.StartTimerLoop(&raft.RaftTimings{
 		TimeoutLow:  5 * time.Second,
 		TimeoutHigh: 10 * time.Second,
 		DeltaLow:    1 * time.Second,
 		DeltaHigh:   2 * time.Second,
 	})
+
+	err := raftInstance.WithAddress(":8081")
 	if err != nil {
 		panic(err)
 	}
