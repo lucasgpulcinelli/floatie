@@ -11,7 +11,6 @@ import (
 
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // A Raft represents a node in the raft protocol running locally.
@@ -69,7 +68,7 @@ type LeaderProperties struct {
 // to expose the gRPC service. It creates the gRPC server as well as the timer
 // goroutine to trigger elections.
 // The function may return without a proper leader elected.
-func New(id int32, grpcAddr string, peerAddresses map[int32]string, options *RaftOption) (*Raft, error) {
+func New(id int32, grpcAddr string, peers map[int32]*grpc.ClientConn, options *RaftOption) (*Raft, error) {
 	raft := &Raft{
 		id:          id,
 		state:       Follower,
@@ -77,22 +76,11 @@ func New(id int32, grpcAddr string, peerAddresses map[int32]string, options *Raf
 		commitIndex: -1,
 		logs:        []*rpcs.Log{},
 		options:     options,
+		peers:       peers,
 	}
 
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
-
-	// connect to peers
-	raft.peers = map[int32]*grpc.ClientConn{}
-	for id, address := range peerAddresses {
-		conn, err := grpc.Dial(address,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err != nil {
-			return nil, err
-		}
-		raft.peers[id] = conn
-	}
 
 	// start gRPC server
 	listener, err := net.Listen("tcp", grpcAddr)
