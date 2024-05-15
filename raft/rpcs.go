@@ -27,7 +27,9 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 		return fail, nil
 	}
 
-	if !raft.matchLog(data.PrevLogIndex, data.PrevLogTerm) {
+	if len(raft.logs) < int(data.PrevLogIndex) ||
+		raft.logs[data.PrevLogIndex].Term != data.PrevLogTerm {
+
 		return fail, nil
 	}
 
@@ -40,6 +42,8 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 	raft.currentTerm = data.Term
 
 	raft.setState(Follower)
+
+	raft.logs = raft.logs[:int(data.PrevLogIndex)+1]
 
 	for _, e := range data.Entries {
 		raft.logs = append(raft.logs, e)
