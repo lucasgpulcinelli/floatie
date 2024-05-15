@@ -30,6 +30,10 @@ func (s State) String() string {
 func (raft *Raft) setState(state State) {
 	slog.Debug("setting state", "from", raft.state, "to", state)
 
+	if state != Leader && state != Candidate && state != Follower {
+		panic("tried setting state to invalid")
+	}
+
 	switch raft.state {
 	case Leader:
 		raft.stopLeader()
@@ -38,29 +42,35 @@ func (raft *Raft) setState(state State) {
 	case Follower:
 		break
 	default:
-		panic("tried to set state to invalid value")
+		panic("invalid value in raft state")
 	}
 
 	raft.state = state
+
+	switch raft.state {
+	case Leader:
+		raft.startLeader()
+	case Candidate:
+		raft.triggerElection()
+	case Follower:
+	default:
+	}
 }
 
 func (raft *Raft) stopLeader() {
-	slog.Debug("stop being leader")
+	slog.Debug("stopping being leader")
+
+	raft.lp = nil
 }
 
 func (raft *Raft) abortElection() {
 	slog.Debug("aborting election")
 }
 
+func (raft *Raft) startLeader() {
+	slog.Debug("starting becoming leader")
+}
+
 func (raft *Raft) triggerElection() {
 	slog.Debug("starting election")
-
-	raft.mut.Lock()
-	defer raft.mut.Unlock()
-
-	if raft.state == Leader {
-		return
-	}
-
-	raft.setState(Candidate)
 }

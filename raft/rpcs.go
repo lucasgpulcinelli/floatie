@@ -33,7 +33,9 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 
 	slog.Debug("accepted AppendEntries", "data", data)
 
-	raft.timerChan <- randDuration(raft.timings.DeltaLow, raft.timings.DeltaHigh)
+	if raft.timerChan != nil {
+		raft.timerChan <- randDuration(raft.timings.DeltaLow, raft.timings.DeltaHigh)
+	}
 
 	raft.currentTerm = data.Term
 
@@ -75,7 +77,9 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 
 	slog.Debug("accepted RequestVote", "data", data)
 
-	raft.timerChan <- randDuration(raft.timings.DeltaLow, raft.timings.DeltaHigh)
+	if raft.timerChan != nil {
+		raft.timerChan <- randDuration(raft.timings.DeltaLow, raft.timings.DeltaHigh)
+	}
 
 	raft.lastVoted = data.CandidateID
 	raft.currentTerm = data.Term

@@ -103,7 +103,13 @@ func (raft *Raft) StartTimerLoop(timings *RaftTimings) {
 	timeout := randDuration(timings.TimeoutLow, timings.TimeoutHigh)
 
 	go timerLoop(timeout, raft.timerChan, raft.timerStop, func() {
-		go raft.triggerElection()
+		go func() {
+			raft.mut.Lock()
+			if raft.state != Leader {
+				raft.setState(Candidate)
+			}
+			raft.mut.Unlock()
+		}()
 	})
 }
 
