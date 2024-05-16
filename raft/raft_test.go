@@ -9,7 +9,7 @@ import (
 )
 
 func TestCreateEmptyRaft(t *testing.T) {
-	r, err := raft.New(0, map[int32]*rpcs.RaftClient{})
+	r, err := raft.New(0, map[int32]rpcs.RaftClient{})
 	if err != nil {
 		t.Logf("error during creation: %v\n", err)
 		t.FailNow()
@@ -27,7 +27,7 @@ func TestCreateNilRaft(t *testing.T) {
 }
 
 func TestCreateRaftSelfPeer(t *testing.T) {
-	_, err := raft.New(0, map[int32]*rpcs.RaftClient{0: nil})
+	_, err := raft.New(0, map[int32]rpcs.RaftClient{0: nil})
 	if err == nil {
 		t.Logf("creation passing self peer did not error")
 		t.FailNow()
@@ -35,7 +35,7 @@ func TestCreateRaftSelfPeer(t *testing.T) {
 }
 
 func TestCreateRaftTimer(t *testing.T) {
-	r, err := raft.New(0, map[int32]*rpcs.RaftClient{})
+	r, err := raft.New(0, map[int32]rpcs.RaftClient{})
 	if err != nil {
 		t.Logf("error during creation: %v\n", err)
 		t.FailNow()

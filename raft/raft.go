@@ -3,6 +3,7 @@
 package raft
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -24,12 +25,13 @@ type Raft struct {
 	currentTerm int32
 	lastVoted   int32
 	logs        []*rpcs.Log
-	peers       map[int32]*rpcs.RaftClient
+	peers       map[int32]rpcs.RaftClient
 
 	commitIndex      int32
 	lastAppliedIndex int32
 
-	lp *LeaderProperties
+	lp             *LeaderProperties
+	electionCancel context.CancelFunc
 
 	id        int32
 	timerChan chan time.Duration
@@ -62,7 +64,7 @@ type LeaderProperties struct {
 // New creates a new raft instance with a unique id and some peers. It does not
 // create the gRPC server nor the timer goroutine to trigger elections.
 // To do that, use the WithAddress and StartTimerLoop methods.
-func New(id int32, peers map[int32]*rpcs.RaftClient) (*Raft, error) {
+func New(id int32, peers map[int32]rpcs.RaftClient) (*Raft, error) {
 	if peers == nil {
 		return nil, fmt.Errorf("tried to create raft with nil peers")
 	}

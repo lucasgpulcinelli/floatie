@@ -25,7 +25,11 @@ func main() {
 	slog.SetDefault(logger)
 	slog.Debug("starting Raft...")
 
-	raftInstance = raft.New(0, map[int32]*rpcs.RaftClient{})
+	var err error
+	raftInstance, err = raft.New(0, map[int32]rpcs.RaftClient{})
+	if err != nil {
+		panic(err)
+	}
 
 	raftInstance.StartTimerLoop(&raft.RaftTimings{
 		TimeoutLow:  5 * time.Second,
@@ -34,7 +38,7 @@ func main() {
 		DeltaHigh:   2 * time.Second,
 	})
 
-	err := raftInstance.WithAddress(":8081")
+	err = raftInstance.WithAddress(":8081")
 	if err != nil {
 		panic(err)
 	}
