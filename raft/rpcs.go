@@ -7,14 +7,6 @@ import (
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 )
 
-func (raft *Raft) matchLog(logIndex, logTerm int32) bool {
-	if len(raft.logs) < int(logIndex) {
-		return false
-	}
-
-	return true
-}
-
 func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData) (*rpcs.RaftResult, error) {
 	slog.Debug("received AppendEntries", "data", data)
 
@@ -27,8 +19,8 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 		return fail, nil
 	}
 
-	if len(raft.logs) < int(data.PrevLogIndex) ||
-		raft.logs[data.PrevLogIndex].Term != data.PrevLogTerm {
+	if data.PrevLogIndex != -1 && (len(raft.logs) < int(data.PrevLogIndex) ||
+		raft.logs[data.PrevLogIndex].Term != data.PrevLogTerm) {
 
 		return fail, nil
 	}
@@ -64,11 +56,18 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 
 	voteFalse := &rpcs.RaftResult{Success: false, Term: raft.currentTerm}
 
+	if data.CandidateID == raft.id {
+		slog.Warn("received vote with own ID")
+		return voteFalse, nil
+	}
+
 	if data.Term < raft.currentTerm || data.LastLogIndex < raft.lastAppliedIndex {
 		return voteFalse, nil
 	}
 
-	if data.Term == raft.currentTerm && raft.lastVoted != data.CandidateID {
+	if data.Term == raft.currentTerm && raft.lastVoted != -1 &&
+		raft.lastVoted != data.CandidateID {
+
 		return voteFalse, nil
 	}
 

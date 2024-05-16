@@ -3,6 +3,7 @@
 package raft
 
 import (
+	"fmt"
 	"log/slog"
 	"net"
 	"sync"
@@ -61,15 +62,22 @@ type LeaderProperties struct {
 // New creates a new raft instance with a unique id and some peers. It does not
 // create the gRPC server nor the timer goroutine to trigger elections.
 // To do that, use the WithAddress and StartTimerLoop methods.
-func New(id int32, peers map[int32]*rpcs.RaftClient) *Raft {
-	return &Raft{
-		id:          id,
-		state:       Follower,
-		lastVoted:   -1,
-		commitIndex: -1,
-		logs:        []*rpcs.Log{},
-		peers:       peers,
+func New(id int32, peers map[int32]*rpcs.RaftClient) (*Raft, error) {
+	if peers == nil {
+		return nil, fmt.Errorf("tried to create raft with nil peers")
 	}
+	if _, ok := peers[id]; ok {
+		return nil, fmt.Errorf("raft peers contains self connection")
+	}
+	return &Raft{
+		id:               id,
+		state:            Follower,
+		lastVoted:        -1,
+		commitIndex:      -1,
+		lastAppliedIndex: -1,
+		logs:             []*rpcs.Log{},
+		peers:            peers,
+	}, nil
 }
 
 // WithAddress serves the raft server at an address specified.
