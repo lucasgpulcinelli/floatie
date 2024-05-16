@@ -121,6 +121,20 @@ func (raft *Raft) StartTimerLoop(timings *RaftTimings) {
 	})
 }
 
+func (raft *Raft) GetLogs() []string {
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+	return raft.getLogs()
+}
+
+func (raft *Raft) getLogs() []string {
+	ls := []string{}
+	for _, v := range raft.logs {
+		ls = append(ls, v.Data)
+	}
+	return ls
+}
+
 // Stop stops the raft instance from sending and receiving RPCs and timing out
 // to elect leaders. Deletes the gRPC server and the timer goroutine.
 func (raft *Raft) Stop() {
