@@ -112,17 +112,57 @@ func TestRequestVote(t *testing.T) {
 		LastLogTerm:  -1,
 	})
 	if err != nil {
-		t.Logf("error during requestVote: %v", err)
+		t.Logf("first vote error during requestVote: %v", err)
 		t.FailNow()
 	}
 
 	if !resp.Success {
-		t.Logf("vote did not succeed")
+		t.Logf("first vote did not succeed")
 		t.FailNow()
 	}
 
 	if resp.Term != 0 {
-		t.Logf("term is not correct")
+		t.Logf("first vote term is not correct")
+		t.FailNow()
+	}
+
+	resp, err = r.RequestVote(context.Background(), &rpcs.RequestVoteData{
+		Term:         0,
+		CandidateID:  2,
+		LastLogIndex: -1,
+		LastLogTerm:  -1,
+	})
+	if err != nil {
+		t.Logf("same term error during requestVote: %v", err)
+		t.FailNow()
+	}
+	if resp.Success {
+		t.Logf("same term vote succeeded")
+		t.FailNow()
+	}
+	if resp.Term != 0 {
+		t.Logf("same vote term is not correct")
+		t.FailNow()
+	}
+
+	resp, err = r.RequestVote(context.Background(), &rpcs.RequestVoteData{
+		Term:         0,
+		CandidateID:  1,
+		LastLogIndex: -1,
+		LastLogTerm:  -1,
+	})
+	if err != nil {
+		t.Logf("duplicate vote error during requestVote: %v", err)
+		t.FailNow()
+	}
+
+	if !resp.Success {
+		t.Logf("duplicate vote did not succeed")
+		t.FailNow()
+	}
+
+	if resp.Term != 0 {
+		t.Logf("duplicate vote term is not correct")
 		t.FailNow()
 	}
 
