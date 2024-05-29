@@ -69,10 +69,12 @@ func TestCreateRaftTimer(t *testing.T) {
 	}
 
 	r.StartTimerLoop(&raft.RaftTimings{
-		TimeoutLow:  20 * time.Millisecond,
-		TimeoutHigh: 40 * time.Millisecond,
-		DeltaLow:    8 * time.Millisecond,
-		DeltaHigh:   12 * time.Millisecond,
+		TimeoutLow:   20 * time.Millisecond,
+		TimeoutHigh:  40 * time.Millisecond,
+		DeltaLow:     8 * time.Millisecond,
+		DeltaHigh:    12 * time.Millisecond,
+		HearbeatLow:  6 * time.Millisecond,
+		HearbeatHigh: 7 * time.Millisecond,
 	})
 
 	r.Stop()

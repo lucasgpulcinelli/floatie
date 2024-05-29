@@ -25,8 +25,6 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 		return fail, nil
 	}
 
-	slog.Debug("accepted AppendEntries", "data", data)
-
 	if raft.timerChan != nil {
 		raft.timerChan <- randDuration(raft.timings.DeltaLow, raft.timings.DeltaHigh)
 	}
@@ -77,8 +75,6 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 			return voteFalse, nil
 		}
 	}
-
-	slog.Debug("accepted RequestVote", "data", data)
 
 	if raft.timerChan != nil {
 		raft.timerChan <- randDuration(raft.timings.DeltaLow, raft.timings.DeltaHigh)

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 )
@@ -63,8 +64,13 @@ func (raft *Raft) setState(state State) {
 }
 
 func (raft *Raft) stopLeader() {
+	if raft.lp == nil {
+		return
+	}
+
 	slog.Debug("stopping being leader")
 
+	raft.lp.cancelHeartbeats()
 	raft.lp = nil
 }
 
@@ -78,8 +84,58 @@ func (raft *Raft) abortElection() {
 	raft.electionCancel = nil
 }
 
+func (raft *Raft) heartbeatManager(ctx context.Context, id int32, peer rpcs.RaftClient) {
+	t := randDuration(raft.timings.HearbeatLow, raft.timings.HearbeatHigh)
+	ticker := time.NewTicker(t)
+	for {
+		select {
+		case <-ctx.Done():
+			ticker.Stop()
+			return
+		case <-ticker.C:
+		}
+		raft.mut.Lock()
+
+		prevLogTerm := int32(-1)
+		if raft.lastAppliedIndex != -1 {
+			prevLogTerm = raft.logs[raft.lastAppliedIndex].Term
+		}
+
+		data := &rpcs.AppendEntryData{
+			Term:         raft.currentTerm,
+			LeaderID:     raft.id,
+			PrevLogIndex: raft.lastAppliedIndex,
+			PrevLogTerm:  int32(prevLogTerm),
+			LeaderCommit: raft.commitIndex,
+			Entries:      []*rpcs.Log{},
+		}
+		raft.mut.Unlock()
+		res, err := peer.AppendEntries(ctx, data)
+		if err != nil {
+			slog.Error("error during AppendEntries", "error", err)
+			continue
+		}
+
+		if !res.Success {
+			ticker.Stop()
+			raft.mut.Lock()
+			raft.setState(Follower)
+			raft.mut.Unlock()
+			return
+		}
+	}
+}
+
 func (raft *Raft) startLeader() {
 	slog.Info("starting becoming leader")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	raft.lp = &LeaderProperties{cancelHeartbeats: cancel}
+
+	// start heartbeat goroutines
+	for id, peer := range raft.peers {
+		go raft.heartbeatManager(ctx, id, peer)
+	}
 }
 
 func (raft *Raft) triggerElection() {
@@ -117,7 +173,7 @@ func (raft *Raft) triggerElection() {
 			result, err := peer.RequestVote(ctx, voteRequest)
 
 			// if the election has already ended or has been cancelled
-			if err == context.Canceled {
+			if ctx.Err() == context.Canceled {
 				wg.Done()
 				return
 			}

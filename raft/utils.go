@@ -17,7 +17,7 @@ func timerLoop(timeout time.Duration, timerChan chan time.Duration, timerStop ch
 		case <-ticker.C:
 			callback()
 		case d := <-timerChan:
-			ticker.Reset(max(time.Now().Sub(started)+d, timeout))
+			ticker.Reset(min(time.Now().Sub(started)+d, timeout))
 		case <-timerStop:
 			return
 		}

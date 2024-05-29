@@ -52,13 +52,17 @@ type RaftTimings struct {
 
 	DeltaLow  time.Duration
 	DeltaHigh time.Duration
+
+	HearbeatLow  time.Duration
+	HearbeatHigh time.Duration
 }
 
 // A LeaderProperty is a value that must only be instantiated during a term
 // where the current instance is a Leader.
 type LeaderProperties struct {
-	nextIndex  []int32
-	matchIndex []int32
+	cancelHeartbeats context.CancelFunc
+	nextIndex        []int32
+	matchIndex       []int32
 }
 
 // New creates a new raft instance with a unique id and some peers. It does not
