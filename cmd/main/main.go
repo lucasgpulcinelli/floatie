@@ -23,7 +23,7 @@ func main() {
 	)
 
 	slog.SetDefault(logger)
-	slog.Debug("starting Raft...")
+	slog.Debug("starting Raft")
 
 	var err error
 	raftInstance, err = raft.New(0, map[int32]rpcs.RaftClient{})

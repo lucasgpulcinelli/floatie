@@ -115,6 +115,7 @@ func (raft *Raft) StartTimerLoop(timings *RaftTimings) {
 	go timerLoop(timeout, raft.timerChan, raft.timerStop, func() {
 		go func() {
 			raft.mut.Lock()
+			slog.Debug("timeout occurred")
 			if raft.state != Leader {
 				raft.setState(Candidate)
 			}

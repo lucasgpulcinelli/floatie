@@ -79,11 +79,11 @@ func (raft *Raft) abortElection() {
 }
 
 func (raft *Raft) startLeader() {
-	slog.Debug("starting becoming leader")
+	slog.Info("starting becoming leader")
 }
 
 func (raft *Raft) triggerElection() {
-	slog.Debug("starting election")
+	slog.Info("starting election")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	raft.electionCancel = cancel
@@ -145,6 +145,7 @@ func (raft *Raft) triggerElection() {
 
 	// if elected
 	if int(favorable.Load()) >= (len(raft.peers)+1)/2 {
+		slog.Info("elected as leader")
 		raft.setState(Leader)
 	}
 }
