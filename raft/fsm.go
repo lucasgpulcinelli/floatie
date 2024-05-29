@@ -85,8 +85,12 @@ func (raft *Raft) startLeader() {
 func (raft *Raft) triggerElection() {
 	slog.Info("starting election")
 
+	raft.currentTerm++
+	newTerm := raft.currentTerm
+
 	ctx, cancel := context.WithCancel(context.Background())
 	raft.electionCancel = cancel
+	raft.lastVoted = raft.id
 
 	lastLogTerm := int32(0)
 	if raft.commitIndex != -1 {
@@ -112,6 +116,11 @@ func (raft *Raft) triggerElection() {
 		go func(id int32, peer rpcs.RaftClient) {
 			result, err := peer.RequestVote(ctx, voteRequest)
 
+			// if the election has already ended or has been cancelled
+			if err == context.Canceled {
+				wg.Done()
+				return
+			}
 			if err != nil {
 				slog.Warn(
 					"Error during vote request",
@@ -123,13 +132,16 @@ func (raft *Raft) triggerElection() {
 			}
 
 			if result.GetSuccess() {
-				if int(favorable.Add(1))+1 >= (len(raft.peers)+1)/2 {
-					cancel()
-				}
+				favorable.Add(1)
 			} else {
-				if int(unfavorable.Add(1))+1 >= (len(raft.peers)+1)/2 {
-					cancel()
-				}
+				unfavorable.Add(1)
+			}
+
+			// if a result is already defined
+			if int(favorable.Load()) >= (len(raft.peers)+1)/2 ||
+				int(unfavorable.Load()) >= (len(raft.peers)+1)/2 {
+				// make all other goroutines stop waiting for a result from the peers
+				cancel()
 			}
 
 			wg.Done()
@@ -139,6 +151,14 @@ func (raft *Raft) triggerElection() {
 	wg.Wait()
 
 	raft.mut.Lock()
+
+	// if something happened (such as an election cancel or other leader with
+	// higher term sent a message), our election does not matter anymore
+	if raft.currentTerm != newTerm {
+		slog.Info("election result aborted", "term", newTerm)
+		raft.electionCancel = nil
+		return
+	}
 
 	cancel()
 	raft.electionCancel = nil
