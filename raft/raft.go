@@ -34,7 +34,7 @@ type Raft struct {
 	electionCancel context.CancelFunc
 
 	id        int32
-	timerChan chan time.Duration
+	timerChan chan struct{}
 	timerStop chan struct{}
 	server    *grpc.Server
 
@@ -49,9 +49,6 @@ type Raft struct {
 type RaftTimings struct {
 	TimeoutLow  time.Duration
 	TimeoutHigh time.Duration
-
-	DeltaLow  time.Duration
-	DeltaHigh time.Duration
 
 	HearbeatLow  time.Duration
 	HearbeatHigh time.Duration
@@ -112,11 +109,10 @@ func (raft *Raft) StartTimerLoop(timings *RaftTimings) {
 
 	raft.timings = timings
 
-	raft.timerChan = make(chan time.Duration)
+	raft.timerChan = make(chan struct{})
 	raft.timerStop = make(chan struct{}, 0)
-	timeout := randDuration(timings.TimeoutLow, timings.TimeoutHigh)
 
-	go timerLoop(timeout, raft.timerChan, raft.timerStop, func() {
+	go timerLoop(raft.timings, raft.timerChan, raft.timerStop, func() {
 		go func() {
 			raft.mut.Lock()
 			slog.Debug("timeout occurred")

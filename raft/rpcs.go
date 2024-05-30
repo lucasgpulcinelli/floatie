@@ -26,12 +26,14 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 	}
 
 	if raft.timerChan != nil {
-		raft.timerChan <- randDuration(raft.timings.DeltaLow, raft.timings.DeltaHigh)
+		raft.timerChan <- struct{}{}
 	}
 
 	raft.currentTerm = data.Term
 
-	raft.setState(Follower)
+	if raft.state != Follower {
+		raft.setState(Follower)
+	}
 
 	raft.logs = raft.logs[:int(data.PrevLogIndex)+1]
 
@@ -77,13 +79,15 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 	}
 
 	if raft.timerChan != nil {
-		raft.timerChan <- randDuration(raft.timings.DeltaLow, raft.timings.DeltaHigh)
+		raft.timerChan <- struct{}{}
 	}
 
 	raft.lastVoted = data.CandidateID
 	raft.currentTerm = data.Term
 
-	raft.setState(Follower)
+	if raft.state != Follower {
+		raft.setState(Follower)
+	}
 
 	return &rpcs.RaftResult{Success: true, Term: raft.currentTerm}, nil
 }
