@@ -1,17 +1,44 @@
 version: '3.5'
 services:
-  floatie: 
+  floatie-1: &floatie
     image: lucasegp/floatie:latest
-    hostname: floatie
     expose:
       - "8080" # HTTP service port
       - "9999" # raft protocol gRPC port
+    environment: &env
+      ID: 1
+      PEERS: 5
+
+  floatie-2:
+    <<: *floatie
+    environment:
+      <<: *env
+      ID: 2
+  floatie-3:
+    <<: *floatie
+    environment:
+      <<: *env
+      ID: 3
+  floatie-4:
+    <<: *floatie
+    environment:
+      <<: *env
+      ID: 4
+  floatie-5:
+    <<: *floatie
+    environment:
+      <<: *env
+      ID: 5
 
   nginx:
     image: nginx:latest
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - floatie
+      - floatie-1
+      - floatie-2
+      - floatie-3
+      - floatie-4
+      - floatie-5
     ports:
       - "8080:8080"

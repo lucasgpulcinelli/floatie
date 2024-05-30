@@ -5,10 +5,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/lucasgpulcinelli/floatie/raft"
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var (
@@ -25,20 +28,56 @@ func main() {
 	slog.SetDefault(logger)
 	slog.Debug("starting Raft")
 
-	var err error
-	raftInstance, err = raft.New(0, map[int32]rpcs.RaftClient{})
+	idS, ok := os.LookupEnv("ID")
+	if !ok {
+		panic("needs ID environment variable")
+	}
+
+	id, err := strconv.Atoi(idS)
+	if err != nil {
+		panic(err)
+	}
+
+	peersS, ok := os.LookupEnv("PEERS")
+	if !ok {
+		panic("needs PEERS environment variable")
+	}
+
+	peersN, err := strconv.Atoi(peersS)
+	if err != nil {
+		panic(err)
+	}
+
+	peers := map[int32]rpcs.RaftClient{}
+	for i := 1; i <= peersN; i++ {
+		if i == id {
+			continue
+		}
+		conn, err := grpc.Dial(
+			fmt.Sprintf("floatie-%d:9999", i),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+
+		if err != nil {
+			panic(err)
+		}
+
+		peers[int32(i)] = rpcs.NewRaftClient(conn)
+	}
+
+	raftInstance, err = raft.New(int32(id), peers)
 	if err != nil {
 		panic(err)
 	}
 
 	raftInstance.StartTimerLoop(&raft.RaftTimings{
-		TimeoutLow:  5 * time.Second,
-		TimeoutHigh: 10 * time.Second,
-		DeltaLow:    1 * time.Second,
-		DeltaHigh:   2 * time.Second,
+		TimeoutLow:   5 * time.Second,
+		TimeoutHigh:  10 * time.Second,
+		HearbeatLow:  3 * time.Second,
+		HearbeatHigh: 4 * time.Second,
 	})
 
-	err = raftInstance.WithAddress(":8081")
+	err = raftInstance.WithAddress(":9999")
 	if err != nil {
 		panic(err)
 	}
