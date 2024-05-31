@@ -61,7 +61,7 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 		return voteFalse, nil
 	}
 
-	if data.Term < raft.currentTerm || data.LastLogIndex < raft.lastAppliedIndex {
+	if data.Term < raft.currentTerm || data.LastLogIndex < raft.commitIndex {
 		return voteFalse, nil
 	}
 

@@ -58,8 +58,8 @@ type RaftTimings struct {
 // where the current instance is a Leader.
 type LeaderProperties struct {
 	cancelHeartbeats context.CancelFunc
-	nextIndex        []int32
-	matchIndex       []int32
+	nextIndex        map[int32]int32
+	matchIndex       map[int32]int32
 }
 
 // New creates a new raft instance with a unique id and some peers. It does not
