@@ -38,6 +38,8 @@ type Raft struct {
 	timerStop chan struct{}
 	server    *grpc.Server
 
+	requestCond *sync.Cond
+
 	mut sync.Mutex
 
 	timings *RaftTimings
@@ -72,7 +74,8 @@ func New(id int32, peers map[int32]rpcs.RaftClient) (*Raft, error) {
 	if _, ok := peers[id]; ok {
 		return nil, fmt.Errorf("raft peers contains self connection")
 	}
-	return &Raft{
+
+	raft := &Raft{
 		id:               id,
 		state:            Follower,
 		lastVoted:        -1,
@@ -80,7 +83,11 @@ func New(id int32, peers map[int32]rpcs.RaftClient) (*Raft, error) {
 		lastAppliedIndex: -1,
 		logs:             []*rpcs.Log{},
 		peers:            peers,
-	}, nil
+	}
+
+	raft.requestCond = sync.NewCond(&raft.mut)
+
+	return raft, nil
 }
 
 // WithAddress serves the raft server at an address specified.
@@ -132,7 +139,10 @@ func (raft *Raft) GetLogs() []string {
 
 func (raft *Raft) getLogs() []string {
 	ls := []string{}
-	for _, v := range raft.logs {
+	for i, v := range raft.logs {
+		if i > int(raft.lastAppliedIndex) {
+			break
+		}
 		ls = append(ls, v.Data)
 	}
 	return ls

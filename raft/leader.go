@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
@@ -136,4 +137,29 @@ func (raft *Raft) refreshCommitIndex() {
 	}
 
 	raft.commitIndex = N
+}
+
+func (raft *Raft) SendLog(logData string) bool {
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+
+	if raft.state != Leader {
+		return false
+	}
+
+	index := int32(len(raft.logs))
+	term := raft.currentTerm
+	raft.logs = append(raft.logs, &rpcs.Log{Term: raft.currentTerm, Data: logData})
+
+	for {
+		if raft.lastAppliedIndex >= index {
+			break
+		}
+		if len(raft.logs) <= int(index) || raft.logs[index].Term != term {
+			return false
+		}
+		raft.requestCond.Wait()
+	}
+
+	return true
 }

@@ -7,6 +7,12 @@ import (
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 )
 
+func (raft *Raft) dropOldLogs(prevLogIndex int32) {
+	raft.logs = raft.logs[:int(prevLogIndex)+1]
+
+	raft.requestCond.Broadcast()
+}
+
 func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData) (*rpcs.RaftResult, error) {
 	slog.Debug("received AppendEntries", "data", data)
 
@@ -35,7 +41,7 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 		raft.setState(Follower)
 	}
 
-	raft.logs = raft.logs[:int(data.PrevLogIndex)+1]
+	raft.dropOldLogs(data.PrevLogIndex)
 
 	for _, e := range data.Entries {
 		raft.logs = append(raft.logs, e)
