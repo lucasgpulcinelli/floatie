@@ -3,8 +3,6 @@ package raft
 import (
 	"context"
 	"log/slog"
-	"slices"
-	"sync"
 	"time"
 
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
@@ -12,6 +10,8 @@ import (
 
 func (raft *Raft) startLeader() {
 	slog.Info("starting becoming leader")
+
+	raft.leaderID = raft.id
 
 	ctx, cancel := context.WithCancel(context.Background())
 	raft.lp = &LeaderProperties{
@@ -38,6 +38,7 @@ func (raft *Raft) stopLeader() {
 	}
 
 	slog.Debug("stopping being leader")
+	raft.leaderID = -1
 
 	raft.lp.cancelHeartbeats()
 	raft.lp = nil
@@ -92,7 +93,7 @@ func (raft *Raft) heartbeatManager(ctx context.Context, id int32, peer rpcs.Raft
 
 		// if we are not the leader anymore, convert to follower
 		if raft.currentTerm != res.Term {
-			raft.currentTerm = res.Term
+			raft.setTerm(res.Term)
 			raft.setState(Follower)
 			raft.mut.Unlock()
 			return
@@ -116,50 +117,4 @@ func (raft *Raft) heartbeatManager(ctx context.Context, id int32, peer rpcs.Raft
 		case <-ticker.C:
 		}
 	}
-}
-
-func (raft *Raft) refreshCommitIndex() {
-
-	// calculate the median
-	matchIndexes := []int32{}
-	for _, mi := range raft.lp.matchIndex {
-		matchIndexes = append(matchIndexes, mi)
-	}
-
-	slices.Sort[[]int32](matchIndexes)
-
-	N := matchIndexes[(len(matchIndexes)+1)/2-1]
-
-	// and see if it is suitable as commitIndex
-
-	if N <= raft.commitIndex || raft.logs[N].Term != raft.currentTerm {
-		return
-	}
-
-	raft.commitIndex = N
-}
-
-func (raft *Raft) SendLog(logData string) bool {
-	raft.mut.Lock()
-	defer raft.mut.Unlock()
-
-	if raft.state != Leader {
-		return false
-	}
-
-	index := int32(len(raft.logs))
-	term := raft.currentTerm
-	raft.logs = append(raft.logs, &rpcs.Log{Term: raft.currentTerm, Data: logData})
-
-	for {
-		if raft.lastAppliedIndex >= index {
-			break
-		}
-		if len(raft.logs) <= int(index) || raft.logs[index].Term != term {
-			return false
-		}
-		raft.requestCond.Wait()
-	}
-
-	return true
 }

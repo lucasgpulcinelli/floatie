@@ -7,12 +7,6 @@ import (
 	"github.com/lucasgpulcinelli/floatie/raft/rpcs"
 )
 
-func (raft *Raft) dropOldLogs(prevLogIndex int32) {
-	raft.logs = raft.logs[:int(prevLogIndex)+1]
-
-	raft.requestCond.Broadcast()
-}
-
 func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData) (*rpcs.RaftResult, error) {
 	slog.Debug("received AppendEntries", "data", data)
 
@@ -35,7 +29,8 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 		raft.timerChan <- struct{}{}
 	}
 
-	raft.currentTerm = data.Term
+	raft.setTerm(data.Term)
+	raft.leaderID = data.LeaderID
 
 	if raft.state != Follower {
 		raft.setState(Follower)
@@ -49,6 +44,7 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 
 	if data.LeaderCommit > raft.commitIndex {
 		raft.commitIndex = min(data.LeaderCommit, int32(len(raft.logs)))
+		raft.applyCommited()
 	}
 
 	return &rpcs.RaftResult{Success: true, Term: raft.currentTerm}, nil
@@ -88,8 +84,8 @@ func (raft *Raft) RequestVote(ctx context.Context, data *rpcs.RequestVoteData) (
 		raft.timerChan <- struct{}{}
 	}
 
+	raft.setTerm(data.Term)
 	raft.lastVoted = data.CandidateID
-	raft.currentTerm = data.Term
 
 	if raft.state != Follower {
 		raft.setState(Follower)

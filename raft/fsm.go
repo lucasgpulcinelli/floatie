@@ -56,3 +56,16 @@ func (raft *Raft) setState(state State) {
 	default:
 	}
 }
+
+func (raft *Raft) setTerm(newTerm int32) {
+	if raft.currentTerm > newTerm {
+		slog.Warn("tried to set term to smaller value")
+		return
+	}
+
+	if raft.currentTerm != newTerm {
+		raft.lastVoted = -1
+	}
+
+	raft.currentTerm = newTerm
+}

@@ -12,6 +12,8 @@ import (
 func (raft *Raft) triggerElection() {
 	slog.Info("starting election")
 
+	raft.leaderID = -1
+
 	raft.currentTerm++
 	newTerm := raft.currentTerm
 

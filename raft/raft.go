@@ -34,11 +34,14 @@ type Raft struct {
 	electionCancel context.CancelFunc
 
 	id        int32
+	leaderID  int32
 	timerChan chan struct{}
 	timerStop chan struct{}
 	server    *grpc.Server
 
-	requestCond *sync.Cond
+	requestCond            *sync.Cond
+	commitGoroutineRunning bool
+	applyLog               func(string) error
 
 	mut sync.Mutex
 
@@ -67,7 +70,7 @@ type LeaderProperties struct {
 // New creates a new raft instance with a unique id and some peers. It does not
 // create the gRPC server nor the timer goroutine to trigger elections.
 // To do that, use the WithAddress and StartTimerLoop methods.
-func New(id int32, peers map[int32]rpcs.RaftClient) (*Raft, error) {
+func New(id int32, peers map[int32]rpcs.RaftClient, applyLog func(string) error) (*Raft, error) {
 	if peers == nil {
 		return nil, fmt.Errorf("tried to create raft with nil peers")
 	}
@@ -78,11 +81,13 @@ func New(id int32, peers map[int32]rpcs.RaftClient) (*Raft, error) {
 	raft := &Raft{
 		id:               id,
 		state:            Follower,
+		leaderID:         -1,
 		lastVoted:        -1,
 		commitIndex:      -1,
 		lastAppliedIndex: -1,
 		logs:             []*rpcs.Log{},
 		peers:            peers,
+		applyLog:         applyLog,
 	}
 
 	raft.requestCond = sync.NewCond(&raft.mut)
@@ -108,46 +113,6 @@ func (raft *Raft) WithAddress(grpcAddr string) error {
 	return nil
 }
 
-// StartTimerLoop starts the timer goroutine to trigger elections if the leader
-// fails to send heartbeats.
-func (raft *Raft) StartTimerLoop(timings *RaftTimings) {
-	raft.mut.Lock()
-	defer raft.mut.Unlock()
-
-	raft.timings = timings
-
-	raft.timerChan = make(chan struct{})
-	raft.timerStop = make(chan struct{}, 0)
-
-	go timerLoop(raft.timings, raft.timerChan, raft.timerStop, func() {
-		go func() {
-			raft.mut.Lock()
-			slog.Debug("timeout occurred")
-			if raft.state != Leader {
-				raft.setState(Candidate)
-			}
-			raft.mut.Unlock()
-		}()
-	})
-}
-
-func (raft *Raft) GetLogs() []string {
-	raft.mut.Lock()
-	defer raft.mut.Unlock()
-	return raft.getLogs()
-}
-
-func (raft *Raft) getLogs() []string {
-	ls := []string{}
-	for i, v := range raft.logs {
-		if i > int(raft.lastAppliedIndex) {
-			break
-		}
-		ls = append(ls, v.Data)
-	}
-	return ls
-}
-
 // Stop stops the raft instance from sending and receiving RPCs and timing out
 // to elect leaders. Deletes the gRPC server and the timer goroutine.
 func (raft *Raft) Stop() {
@@ -163,4 +128,15 @@ func (raft *Raft) Stop() {
 	if raft.server != nil {
 		raft.server.GracefulStop()
 	}
+}
+
+func (raft *Raft) GetCurrentLeader() (int32, bool) {
+	raft.mut.Lock()
+	defer raft.mut.Unlock()
+
+	return raft.leaderID, raft.leaderID > 0
+}
+
+func (raft *Raft) GetID() int32 {
+	return raft.id
 }

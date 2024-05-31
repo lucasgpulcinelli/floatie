@@ -31,7 +31,11 @@ func TestCreateRaft(t *testing.T) {
 		func(_ *rpcs.RequestVoteData) *rpcs.RaftResult { return nil },
 	}
 
-	r, err := raft.New(0, map[int32]rpcs.RaftClient{1: peer, 2: peer})
+	r, err := raft.New(
+		0,
+		map[int32]rpcs.RaftClient{1: peer, 2: peer},
+		func(s string) error { return nil },
+	)
 	if err != nil {
 		t.Logf("error during creation: %v\n", err)
 		t.FailNow()
@@ -41,7 +45,7 @@ func TestCreateRaft(t *testing.T) {
 }
 
 func TestCreateNilRaft(t *testing.T) {
-	_, err := raft.New(0, nil)
+	_, err := raft.New(0, nil, func(string) error { return nil })
 	if err == nil {
 		t.Log("creation passing nil did not error")
 		t.FailNow()
@@ -54,7 +58,11 @@ func TestCreateRaftSelfPeer(t *testing.T) {
 		func(_ *rpcs.RequestVoteData) *rpcs.RaftResult { return nil },
 	}
 
-	_, err := raft.New(0, map[int32]rpcs.RaftClient{1: peer, 0: peer})
+	_, err := raft.New(
+		0,
+		map[int32]rpcs.RaftClient{1: peer, 0: peer},
+		func(string) error { return nil },
+	)
 	if err == nil {
 		t.Logf("creation passing self peer did not error")
 		t.FailNow()
@@ -62,7 +70,11 @@ func TestCreateRaftSelfPeer(t *testing.T) {
 }
 
 func TestCreateRaftTimer(t *testing.T) {
-	r, err := raft.New(0, map[int32]rpcs.RaftClient{})
+	r, err := raft.New(
+		0,
+		map[int32]rpcs.RaftClient{},
+		func(s string) error { return nil },
+	)
 	if err != nil {
 		t.Logf("error during creation: %v\n", err)
 		t.FailNow()

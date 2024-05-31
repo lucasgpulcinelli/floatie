@@ -9,7 +9,11 @@ import (
 )
 
 func TestAppendEntries(t *testing.T) {
-	r, err := raft.New(0, map[int32]rpcs.RaftClient{})
+	r, err := raft.New(
+		0,
+		map[int32]rpcs.RaftClient{},
+		func(s string) error { return nil },
+	)
 	if err != nil {
 		t.Logf("error during raft creation: %v", err)
 		t.FailNow()
@@ -99,7 +103,11 @@ func TestAppendEntries(t *testing.T) {
 }
 
 func TestRequestVote(t *testing.T) {
-	r, err := raft.New(0, map[int32]rpcs.RaftClient{})
+	r, err := raft.New(
+		0,
+		map[int32]rpcs.RaftClient{},
+		func(s string) error { return nil },
+	)
 	if err != nil {
 		t.Logf("error during raft creation: %v", err)
 		t.FailNow()
