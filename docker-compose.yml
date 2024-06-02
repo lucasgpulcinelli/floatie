@@ -5,30 +5,25 @@ services:
     expose:
       - "8080" # HTTP service port
       - "9999" # raft protocol gRPC port
-    environment: &env
-      ID: 1
-      PEERS: 5
+    command: "--id=1"
+    volumes:
+      - ./floatie.json:/srv/floatie.json
 
   floatie-2:
     <<: *floatie
-    environment:
-      <<: *env
-      ID: 2
+    command: "--id=2"
+
   floatie-3:
     <<: *floatie
-    environment:
-      <<: *env
-      ID: 3
+    command: "--id=3"
+
   floatie-4:
     <<: *floatie
-    environment:
-      <<: *env
-      ID: 4
+    command: "--id=4"
+
   floatie-5:
     <<: *floatie
-    environment:
-      <<: *env
-      ID: 5
+    command: "--id=5"
 
   nginx:
     image: nginx:latest

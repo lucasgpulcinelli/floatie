@@ -10,6 +10,8 @@ RUN go build -o main -v github.com/lucasgpulcinelli/floatie/cmd/main
 
 FROM alpine:latest
 
+WORKDIR /srv
+
 COPY --from=0 /srv/main /srv/main
 
 EXPOSE 8080
