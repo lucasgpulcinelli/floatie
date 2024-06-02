@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,16 +23,15 @@ var (
 )
 
 func applyLog(log string) error {
-	action, key := "", ""
-	fmt.Sscanf(log, "%s %s %s", &action, &key)
+  logSplit := strings.Split(log, " ")
 
-	if action == "POST" {
-		value := ""
-		fmt.Sscanf(log, "%s %s %s", &action, &key, &value)
-		storage.Store(key, value)
-	} else if action == "DELETE" {
-		storage.Delete(key)
-	}
+	if len(logSplit) == 3 && logSplit[0] == "POST" {
+		storage.Store(logSplit[1], logSplit[2])
+	} else if len(logSplit) == 2 && logSplit[0] == "DELETE" {
+		storage.Delete(logSplit[1])
+	} else {
+    slog.Warn("Malformed action received", "log", log)
+  }
 
 	return nil
 }
@@ -108,7 +108,9 @@ func main() {
 		panic(err)
 	}
 
-	http.HandleFunc("/", handler)
+	http.HandleFunc("GET /api/v1/floatieDB", getHandler)
+	http.HandleFunc("POST /api/v1/floatieDB", postHandler)
+	http.HandleFunc("DELETE /api/v1/floatieDB", deleteHandler)
 
 	slog.Debug("starting server")
 
@@ -116,55 +118,83 @@ func main() {
 	slog.Error("%v", err)
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func getHandler(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
 		w.WriteHeader(400)
 		fmt.Fprintln(w, "Needs 'key' parameter")
 		return
 	}
-	value := r.URL.Query().Get("value")
-	if r.Method == "POST" && value == "" {
+
+  value, err := getStored(key)
+
+  if err != nil && err.Error() == "not found" {
+    w.WriteHeader(404)
+    return
+  }
+  if err != nil {
+    w.WriteHeader(500)
+    slog.Error("error getting value", "error", err)
+    return
+  }
+
+  w.WriteHeader(200)
+  fmt.Fprintf(w, "%s", value)
+}
+
+func postHandler(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		w.WriteHeader(400)
+		fmt.Fprintln(w, "Needs 'key' parameter")
+		return
+	}
+
+  value := r.URL.Query().Get("value")
+	if value == "" {
 		w.WriteHeader(400)
 		fmt.Fprintln(w, "Needs 'value' parameter")
 		return
 	}
 
-	if r.Method == "GET" {
-		value, err := getStored(key)
+	for {
+		log := fmt.Sprintf("%s %s %s", r.Method, key, value)
 
-		if err != nil && err.Error() == "not found" {
-			w.WriteHeader(404)
-			return
-		}
-		if err != nil {
-			w.WriteHeader(500)
-			slog.Error("error getting value", "error", err)
+		ok := raftInstance.SendLog(log)
+		if ok {
+			w.WriteHeader(201)
 			return
 		}
 
-		w.WriteHeader(200)
-		fmt.Fprintf(w, "%s", value)
-		return
+		lid, ok := raftInstance.GetCurrentLeader()
+		if !ok {
+			w.WriteHeader(503)
+			fmt.Fprintln(w, "No leader at the moment")
+			return
+		}
+
+		if lid != raftInstance.GetID() {
+			w.Header().Add("Location", fmt.Sprintf("http://floatie-%d:8080", lid))
+			w.WriteHeader(307)
+			return
+		}
 	}
-	if r.Method != "POST" && r.Method != "DELETE" {
-		w.WriteHeader(405)
+}
+
+func deleteHandler(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		w.WriteHeader(400)
+		fmt.Fprintln(w, "Needs 'key' parameter")
 		return
 	}
 
 	for {
 		log := fmt.Sprintf("%s %s", r.Method, key)
-		if r.Method == "POST" {
-			log += " " + value
-		}
 
 		ok := raftInstance.SendLog(log)
 		if ok {
-			code := 200
-			if r.Method == "POST" {
-				code = 201
-			}
-			w.WriteHeader(code)
+			w.WriteHeader(200)
 			return
 		}
 
