@@ -40,8 +40,9 @@ type Raft struct {
 	server    *grpc.Server
 
 	requestCond            *sync.Cond
+	requestResults         map[int32]any
 	commitGoroutineRunning bool
-	applyLog               func(string) error
+	applyLog               func(string) (any, error)
 
 	mut sync.Mutex
 
@@ -70,7 +71,7 @@ type LeaderProperties struct {
 // New creates a new raft instance with a unique id and some peers. It does not
 // create the gRPC server nor the timer goroutine to trigger elections.
 // To do that, use the WithAddress and StartTimerLoop methods.
-func New(id int32, peers map[int32]rpcs.RaftClient, applyLog func(string) error) (*Raft, error) {
+func New(id int32, peers map[int32]rpcs.RaftClient, applyLog func(string) (any, error)) (*Raft, error) {
 	if peers == nil {
 		return nil, fmt.Errorf("tried to create raft with nil peers")
 	}
@@ -88,6 +89,7 @@ func New(id int32, peers map[int32]rpcs.RaftClient, applyLog func(string) error)
 		logs:             []*rpcs.Log{},
 		peers:            peers,
 		applyLog:         applyLog,
+		requestResults:   map[int32]any{},
 	}
 
 	raft.requestCond = sync.NewCond(&raft.mut)

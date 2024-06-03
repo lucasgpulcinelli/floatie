@@ -19,7 +19,7 @@ func (raft *Raft) AppendEntries(ctx context.Context, data *rpcs.AppendEntryData)
 		return fail, nil
 	}
 
-	if data.PrevLogIndex != -1 && (len(raft.logs) < int(data.PrevLogIndex) ||
+	if data.PrevLogIndex != -1 && (len(raft.logs) <= int(data.PrevLogIndex) ||
 		raft.logs[data.PrevLogIndex].Term != data.PrevLogTerm) {
 
 		return fail, nil

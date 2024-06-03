@@ -14,17 +14,17 @@ import (
 )
 
 var (
-	kv      *floatie.KVStore
-	id      = flag.Int("id", 1, "the id this instance should have")
-	config  = flag.String("config", "floatie.json", "floatie cluster definition file")
-  raftAddress = flag.String("raft-addr", ":9999", "address to use for raft")
-  httpAddress = flag.String("http-addr", ":8080", "address to use for http")
-	cluster map[int32][2]string
+	kv          *floatie.KVStore
+	id          = flag.Int("id", 1, "the id this instance should have")
+	config      = flag.String("config", "floatie.json", "floatie cluster definition file")
+	raftAddress = flag.String("raft-addr", ":9999", "address to use for raft")
+	httpAddress = flag.String("http-addr", ":8080", "address to use for http")
+	cluster     map[int32][2]string
 )
 
 func setupLogging() {
 	l := &slog.LevelVar{}
-	l.Set(slog.LevelDebug)
+	l.Set(slog.LevelInfo)
 	logger := slog.New(
 		slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: l}),
 	)
@@ -42,14 +42,14 @@ func setupKV() error {
 		return err
 	}
 
-  peers := map[int32]string{}
-  for i, addresses := range cluster {
-    if int32(*id) == i {
-      continue
-    }
+	peers := map[int32]string{}
+	for i, addresses := range cluster {
+		if int32(*id) == i {
+			continue
+		}
 
-    peers[i] = addresses[1]
-  }
+		peers[i] = addresses[1]
+	}
 
 	kv = floatie.NewKVStore()
 	err = kv.WithCluster(int32(*id), peers)
@@ -63,10 +63,10 @@ func setupKV() error {
 	}
 
 	err = kv.WithTimer(&raft.RaftTimings{
-		HearbeatLow:  time.Second * 3,
-		HearbeatHigh: time.Second * 4,
-		TimeoutLow:   time.Second * 5,
-		TimeoutHigh:  time.Second * 8,
+		HearbeatLow:  time.Millisecond * 50,
+		HearbeatHigh: time.Millisecond * 80,
+		TimeoutLow:   time.Millisecond * 150,
+		TimeoutHigh:  time.Millisecond * 300,
 	})
 	if err != nil {
 		return err
@@ -82,10 +82,10 @@ func main() {
 
 	slog.Debug("starting Raft")
 
-  err := setupKV()
-  if err != nil {
-    panic(err)
-  }
+	err := setupKV()
+	if err != nil {
+		panic(err)
+	}
 
 	http.HandleFunc("GET /api/v1/floatieDB", getHandler)
 	http.HandleFunc("POST /api/v1/floatieDB", postHandler)
@@ -105,15 +105,20 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	value, ok := kv.Get(key)
+	value, ok, leader := kv.Get(key)
 
-	if !ok {
+	if ok && value == "" {
 		w.WriteHeader(404)
-		return
+	} else if ok {
+		w.WriteHeader(200)
+		fmt.Fprint(w, value)
+	} else if leader > 0 {
+		w.Header().Add("Location", "http://"+cluster[leader][0])
+		w.WriteHeader(307)
+	} else {
+		w.WriteHeader(503)
+		fmt.Fprintln(w, "No leader at the moment")
 	}
-
-	w.WriteHeader(200)
-	fmt.Fprintf(w, "%s", value)
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
@@ -134,9 +139,8 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	ok, leader := kv.Store(key, value)
 	if ok {
 		w.WriteHeader(201)
-		return
 	} else if leader > 0 {
-    w.Header().Add("Location", "http://"+cluster[leader][0])
+		w.Header().Add("Location", "http://"+cluster[leader][0])
 		w.WriteHeader(307)
 	} else {
 		w.WriteHeader(503)
@@ -155,9 +159,8 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	ok, leader := kv.Delete(key)
 	if ok {
 		w.WriteHeader(200)
-		return
 	} else if leader > 0 {
-    w.Header().Add("Location", "http://"+cluster[leader][0])
+		w.Header().Add("Location", "http://"+cluster[leader][0])
 		w.WriteHeader(307)
 	} else {
 		w.WriteHeader(503)

@@ -44,7 +44,7 @@ func (raft *Raft) applyCommited() {
 			toApply := raft.logs[raft.lastAppliedIndex+1].Data
 			raft.mut.Unlock()
 
-			err := raft.applyLog(toApply)
+			result, err := raft.applyLog(toApply)
 			if err != nil {
 				slog.Error("applyLog failed", "error", err)
 				time.Sleep(t)
@@ -58,6 +58,12 @@ func (raft *Raft) applyCommited() {
 
 			raft.mut.Lock()
 			raft.lastAppliedIndex++
+
+			// if there is a request waiting for the result
+			if _, ok := raft.requestResults[raft.lastAppliedIndex]; ok {
+				raft.requestResults[raft.lastAppliedIndex] = result
+			}
+
 			raft.requestCond.Broadcast()
 		}
 
@@ -73,7 +79,7 @@ func (raft *Raft) refreshCommitIndex() {
 		matchIndexes = append(matchIndexes, mi)
 	}
 
-	slices.Sort[[]int32](matchIndexes)
+	slices.Sort(matchIndexes)
 
 	N := matchIndexes[(len(matchIndexes)+1)/2-1]
 
@@ -86,27 +92,33 @@ func (raft *Raft) refreshCommitIndex() {
 	raft.applyCommited()
 }
 
-func (raft *Raft) SendLog(logData string) bool {
+func (raft *Raft) SendLog(logData string) (any, bool) {
 	raft.mut.Lock()
 	defer raft.mut.Unlock()
 
 	if raft.state != Leader {
-		return false
+		return nil, false
 	}
 
 	index := int32(len(raft.logs))
 	term := raft.currentTerm
 	raft.logs = append(raft.logs, &rpcs.Log{Term: raft.currentTerm, Data: logData})
 
+	// signal that we want a result back for this index
+	raft.requestResults[index] = nil
+
 	for {
 		if raft.lastAppliedIndex >= index {
 			break
 		}
 		if len(raft.logs) <= int(index) || raft.logs[index].Term != term {
-			return false
+			return nil, false
 		}
 		raft.requestCond.Wait()
 	}
 
-	return true
+	result := raft.requestResults[index]
+	delete(raft.requestResults, index)
+
+	return result, true
 }
